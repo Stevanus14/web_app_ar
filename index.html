@@ -4,8 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>WebAR - Tumbler Recognition</title>
+  <title>WebAR Tumbler Recognition</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
@@ -21,223 +20,224 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #111827;
+      background: #000;
+      overflow: hidden;
     }
 
-    #startScreen {
+    /* Kotak informasi bagian atas */
+    #info {
       position: fixed;
-      inset: 0;
+      top: 15px;
+      left: 5%;
+      width: 90%;
+      padding: 16px;
+      background: white;
+      border-radius: 14px;
       z-index: 10;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 25px;
-      text-align: center;
-      color: white;
-      background: #111827;
+      display: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.25);
     }
 
-    #startButton {
-      margin-top: 20px;
-      padding: 15px 30px;
+    #info h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      color: #222;
+    }
+
+    #info p {
+      margin: 0;
+      font-size: 14px;
+      color: #555;
+      line-height: 1.5;
+    }
+
+    /* Tombol pilihan target */
+    #controls {
+      position: fixed;
+      bottom: 25px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      z-index: 20;
+    }
+
+    button {
       border: none;
-      border-radius: 12px;
+      border-radius: 10px;
+      padding: 13px 18px;
+      background: white;
+      color: #222;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    button.active {
       background: #2563eb;
       color: white;
-      font-size: 17px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    #startButton:disabled {
-      opacity: 0.6;
     }
 
     #status {
       position: fixed;
-      top: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 5;
-      padding: 10px 18px;
-      border-radius: 20px;
-      background: rgba(0, 0, 0, 0.75);
-      color: white;
-      font-size: 13px;
+      bottom: 85px;
+      width: 100%;
       text-align: center;
-      white-space: nowrap;
-      pointer-events: none;
+      color: white;
+      z-index: 20;
+      font-size: 13px;
+      text-shadow: 0 1px 4px black;
     }
 
-    #status.found {
-      background: #15803d;
-    }
-
-    #errorMessage {
-      color: #fca5a5;
-      margin-top: 15px;
-      font-size: 14px;
-    }
-
-    a-scene {
+    #loading {
       position: fixed;
       inset: 0;
-      width: 100%;
-      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      background: #111;
+      z-index: 100;
+      text-align: center;
+      padding: 25px;
     }
   </style>
 </head>
 
 <body>
 
-  <!-- Halaman awal -->
-  <div id="startScreen">
-    <h1>WebAR Tumbler</h1>
+  <div id="loading">
+    <p>Memuat WebAR...</p>
+  </div>
 
-    <p>
-      Arahkan kamera ke foto tumbler
-      untuk mengenali objek.
-    </p>
+  <div id="info">
+    <h2 id="infoTitle">Tumbler</h2>
+    <p id="infoDescription"></p>
+  </div>
 
-    <button id="startButton">
-      Mulai AR
+  <div id="status">Pilih gambar yang ingin dikenali</div>
+
+  <div id="controls">
+    <button id="btn1" class="active" onclick="startTracking(1)">
+      Tumbler Lantai
     </button>
 
-    <div id="errorMessage"></div>
+    <button id="btn2" onclick="startTracking(2)">
+      Tumbler Meja
+    </button>
   </div>
 
-  <!-- Status deteksi -->
-  <div id="status">
-    Kamera belum diaktifkan
-  </div>
-
-  <!-- AR Scene -->
   <a-scene
-    mindar-image="
-      imageTargetSrc: ./assets/tumbler.mind;
-      autoStart: false;
-      uiLoading: no;
-      uiScanning: no;
-      uiError: no;
-    "
-    color-space="sRGB"
-    renderer="colorManagement: true"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
+    id="scene"
+    mindar-image="imageTargetSrc: asset/tumbler.mind; autoStart: false;"
     embedded
-  >
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
 
-    <!-- Kamera -->
-    <a-camera
-      position="0 0 0"
-      look-controls="enabled: false"
-    ></a-camera>
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- Target gambar tumbler -->
-    <a-entity
-      id="tumblerTarget"
-      mindar-image-target="targetIndex: 0"
-    >
-
-      <!-- Background teks -->
-      <a-plane
-        position="0 0.35 0.02"
-        width="1.15"
-        height="0.32"
-        color="#111827"
-        opacity="0.9"
-      ></a-plane>
-
-      <!-- Teks utama -->
-      <a-text
-        value="Ini adalah Tumbler!"
-        position="0 0.35 0.04"
-        align="center"
-        color="#FFFFFF"
-        width="2.5"
-        scale="0.5 0.5 0.5"
-      ></a-text>
-
-      <!-- Teks tambahan -->
-      <a-text
-        value="Objek berhasil dikenali"
-        position="0 0.20 0.04"
-        align="center"
-        color="#FFFFFF"
-        width="2"
-        scale="0.35 0.35 0.35"
-      ></a-text>
-
-    </a-entity>
+    <a-entity id="target1" mindar-image-target="targetIndex: 0"></a-entity>
 
   </a-scene>
 
   <script>
-    const scene = document.querySelector("a-scene");
-    const target = document.querySelector("#tumblerTarget");
-
-    const startScreen = document.querySelector("#startScreen");
-    const startButton = document.querySelector("#startButton");
+    const scene = document.querySelector("#scene");
+    const info = document.querySelector("#info");
+    const title = document.querySelector("#infoTitle");
+    const description = document.querySelector("#infoDescription");
     const status = document.querySelector("#status");
-    const errorMessage = document.querySelector("#errorMessage");
+    const loading = document.querySelector("#loading");
 
-    let arStarted = false;
+    let currentTarget = 1;
+    let started = false;
 
-    // Menunggu A-Frame selesai memuat scene
-    scene.addEventListener("loaded", () => {
-      startButton.disabled = false;
-    });
+    async function startTracking(target) {
 
-    // Memulai kamera setelah tombol ditekan
-    startButton.addEventListener("click", async () => {
+      currentTarget = target;
 
-      if (arStarted) return;
+      info.style.display = "none";
+      loading.style.display = "flex";
 
-      startButton.disabled = true;
-      startButton.textContent = "Mengaktifkan kamera...";
-      errorMessage.textContent = "";
-      status.textContent = "Mengaktifkan kamera...";
+      status.innerText = "Menyiapkan kamera...";
+
+      document.querySelector("#btn1").classList.toggle("active", target === 1);
+      document.querySelector("#btn2").classList.toggle("active", target === 2);
+
+      // Hentikan instance sebelumnya
+      if (started) {
+        try {
+          await scene.systems["mindar-image-system"].stop();
+        } catch (error) {
+          console.log(error);
+        }
+        started = false;
+      }
+
+      // Ganti sumber target
+      const mindar = scene.getAttribute("mindar-image");
+
+      mindar.imageTargetSrc =
+        target === 1
+          ? "asset/tumbler.mind"
+          : "asset/tumbler2.mind";
+
+      scene.setAttribute("mindar-image", mindar);
+
+      // Ganti entity target
+      const oldTarget = document.querySelector("#target1");
+
+      if (oldTarget) {
+        oldTarget.remove();
+      }
+
+      const newTarget = document.createElement("a-entity");
+      newTarget.setAttribute("mindar-image-target", "targetIndex: 0");
+      newTarget.id = "target1";
+      scene.appendChild(newTarget);
+
+      newTarget.addEventListener("targetFound", () => {
+
+        if (currentTarget === 1) {
+          title.innerText = "Tumbler 1 - Lantai";
+          description.innerText =
+            "Kamera berhasil mengenali tumbler yang berada di lantai.";
+        } else {
+          title.innerText = "Tumbler 2 - Meja";
+          description.innerText =
+            "Kamera berhasil mengenali tumbler yang berada di meja.";
+        }
+
+        info.style.display = "block";
+        status.innerText = "Gambar berhasil dikenali!";
+      });
+
+      newTarget.addEventListener("targetLost", () => {
+        info.style.display = "none";
+        status.innerText = "Arahkan kamera ke gambar tumbler.";
+      });
 
       try {
-        const arSystem = scene.systems["mindar-image-system"];
+        await scene.systems["mindar-image-system"].start();
 
-        await arSystem.start();
+        started = true;
+        loading.style.display = "none";
 
-        arStarted = true;
-
-        startScreen.style.display = "none";
-        status.textContent = "Arahkan kamera ke foto tumbler";
+        status.innerText = "Arahkan kamera ke gambar tumbler.";
 
       } catch (error) {
-
-        console.error("AR Error:", error);
-
-        status.textContent = "Kamera gagal diaktifkan";
-
-        errorMessage.textContent =
-          "Pastikan akses kamera diizinkan dan halaman dibuka melalui HTTPS.";
-
-        startButton.disabled = false;
-        startButton.textContent = "Coba Lagi";
+        console.error(error);
+        loading.innerHTML =
+          "<p>Gagal membuka kamera. Pastikan izin kamera diberikan dan website menggunakan HTTPS.</p>";
       }
+    }
+
+    window.addEventListener("load", () => {
+      loading.style.display = "none";
+      status.innerText = "Tekan salah satu tombol untuk memulai.";
     });
 
-    // Ketika gambar tumbler terdeteksi
-    target.addEventListener("targetFound", () => {
-
-      status.textContent = "Tumbler berhasil dikenali!";
-      status.classList.add("found");
-
-    });
-
-    // Ketika gambar tumbler tidak lagi terlihat
-    target.addEventListener("targetLost", () => {
-
-      status.textContent = "Mencari gambar tumbler...";
-      status.classList.remove("found");
-
-    });
   </script>
 
 </body>
