@@ -135,7 +135,8 @@
   function extractReference(img, name) {
     const c = imageToCanvas(img);
     const gray = matFromCanvas(c);
-    const orb = cv.ORB_create(1800);
+    const orb = new cv.ORB();
+    if (orb.setMaxFeatures) orb.setMaxFeatures(1800);
     const keypoints = new cv.KeyPointVector();
     const descriptors = new cv.Mat();
     const mask = new cv.Mat();
@@ -322,7 +323,8 @@
       frame = cv.imread(temp);
       gray = new cv.Mat();
       cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
-      orb = cv.ORB_create(1600);
+      orb = new cv.ORB();
+      if (orb.setMaxFeatures) orb.setMaxFeatures(1600);
       kp = new cv.KeyPointVector();
       desc = new cv.Mat();
       mask = new cv.Mat();
