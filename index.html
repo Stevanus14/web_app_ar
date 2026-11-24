@@ -1,244 +1,376 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>WebAR - Tumbler Recognition</title>
-
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-
-  <!-- MindAR -->
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #111827;
-    }
-
-    #startScreen {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 25px;
-      text-align: center;
-      color: white;
-      background: #111827;
-    }
-
-    #startButton {
-      margin-top: 20px;
-      padding: 15px 30px;
-      border: none;
-      border-radius: 12px;
-      background: #2563eb;
-      color: white;
-      font-size: 17px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    #startButton:disabled {
-      opacity: 0.6;
-    }
-
-    #status {
-      position: fixed;
-      top: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 5;
-      padding: 10px 18px;
-      border-radius: 20px;
-      background: rgba(0, 0, 0, 0.75);
-      color: white;
-      font-size: 13px;
-      text-align: center;
-      white-space: nowrap;
-      pointer-events: none;
-    }
-
-    #status.found {
-      background: #15803d;
-    }
-
-    #errorMessage {
-      color: #fca5a5;
-      margin-top: 15px;
-      font-size: 14px;
-    }
-
-    a-scene {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tumbler Recognition — OpenCV.js ORB</title>
+<style>
+  :root { color-scheme: dark; --bg:#10141c; --panel:#1a2230; --line:#303b4d; --text:#eef3fb; --muted:#aab6c7; --accent:#7dd3fc; --good:#4ade80; --bad:#fbbf24; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:22px; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
+  main { max-width:1000px; margin:auto; }
+  h1 { margin:0 0 6px; font-size:clamp(24px,4vw,34px); }
+  p { color:var(--muted); margin:6px 0 16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px; margin:14px 0; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  button, input::file-selector-button { border:0; border-radius:10px; padding:10px 14px; font-weight:650; cursor:pointer; }
+  button { background:var(--accent); color:#08202d; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  input[type=file] { max-width:100%; color:var(--muted); }
+  .stage { position:relative; width:100%; max-width:800px; margin:12px auto 0; background:#05080d; border-radius:12px; overflow:hidden; }
+  video, canvas { display:block; width:100%; height:auto; }
+  canvas { position:absolute; inset:0; }
+  #status { font-weight:700; }
+  .muted { color:var(--muted); font-size:13px; }
+  .pill { display:inline-block; padding:4px 9px; border-radius:999px; background:#263449; color:#dbeafe; margin:3px 4px 3px 0; font-size:12px; }
+  #refs { margin-top:8px; }
+  .warn { color:#fcd34d; }
+  .good { color:var(--good); }
+  .error { color:#fca5a5; }
+  ol { padding-left:22px; color:var(--muted); }
+</style>
 </head>
-
 <body>
+<main>
+  <h1>Tumbler Recognition</h1>
+  <p>Prototype pengenalan satu tumbler fisik menggunakan OpenCV.js, ORB feature matching, dan homography. Semua pemrosesan berjalan di browser.</p>
 
-  <!-- Halaman awal -->
-  <div id="startScreen">
-    <h1>WebAR Tumbler</h1>
+  <section class="panel">
+    <h2>1. Masukkan foto referensi</h2>
+    <p class="muted">Pilih beberapa foto dari tumbler fisik yang sama. Usahakan tiap foto memperlihatkan sisi yang berbeda: depan, kiri, kanan, dan belakang.</p>
+    <input id="referenceFiles" type="file" accept="image/*" multiple>
+    <div id="refs" class="muted">Belum ada foto referensi.</div>
+  </section>
 
-    <p>
-      Arahkan kamera ke foto tumbler
-      untuk mengenali objek.
-    </p>
+  <section class="panel">
+    <div class="row">
+      <button id="startBtn" disabled>Mulai kamera</button>
+      <button id="stopBtn" disabled>Matikan kamera</button>
+      <span id="status">Memuat OpenCV.js…</span>
+    </div>
+    <div class="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <p id="detail" class="muted">Tunggu sampai OpenCV siap, lalu masukkan foto referensi dan mulai kamera.</p>
+  </section>
 
-    <button id="startButton">
-      Mulai AR
-    </button>
+  <section class="panel">
+    <h2>2. Cara menguji</h2>
+    <ol>
+      <li>Ambil foto referensi tumbler yang sama dari beberapa sisi.</li>
+      <li>Izinkan akses kamera. Di ponsel, halaman harus dibuka melalui HTTPS; di komputer, localhost juga bisa.</li>
+      <li>Arahkan kamera ke tumbler fisik, lalu putar perlahan untuk menguji sisi yang berbeda.</li>
+      <li>Uji juga benda lain yang bukan tumbler untuk melihat apakah sistem keliru mengenalinya.</li>
+    </ol>
+    <p class="muted warn">Catatan: ORB mencocokkan tekstur dan detail visual, bukan memahami kategori “tumbler”. Permukaan polos atau reflektif mungkin menghasilkan sedikit fitur. Karena tumbler berbentuk silinder, foto referensi dari beberapa sudut sangat membantu.</p>
+  </section>
+</main>
 
-    <div id="errorMessage"></div>
-  </div>
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+<script>
+(() => {
+  const fileInput = document.getElementById('referenceFiles');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('overlay');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('status');
+  const detailEl = document.getElementById('detail');
+  const refsEl = document.getElementById('refs');
 
-  <!-- Status deteksi -->
-  <div id="status">
-    Kamera belum diaktifkan
-  </div>
+  let cvReady = false;
+  let stream = null;
+  let rafId = null;
+  let lastProcess = 0;
+  let busy = false;
+  let references = [];
+  const MAX_WIDTH = 640;
+  const PROCESS_INTERVAL = 220;
 
-  <!-- AR Scene -->
-  <a-scene
-    mindar-image="
-      imageTargetSrc: ./assets/tumbler.mind;
-      autoStart: false;
-      uiLoading: no;
-      uiScanning: no;
-      uiError: no;
-    "
-    color-space="sRGB"
-    renderer="colorManagement: true"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
-    embedded
-  >
+  function setStatus(message, className='') {
+    statusEl.textContent = message;
+    statusEl.className = className;
+  }
 
-    <!-- Kamera -->
-    <a-camera
-      position="0 0 0"
-      look-controls="enabled: false"
-    ></a-camera>
+  function waitForOpenCV() {
+    if (typeof cv === 'undefined') {
+      setTimeout(waitForOpenCV, 150);
+      return;
+    }
+    cv['onRuntimeInitialized'] = () => {
+      cvReady = true;
+      setStatus('OpenCV siap', 'good');
+      startBtn.disabled = references.length === 0;
+      detailEl.textContent = 'OpenCV berhasil dimuat. Masukkan foto referensi untuk memulai.';
+    };
+    // Some builds may already be initialized before this callback is assigned.
+    if (cv.Mat) {
+      cvReady = true;
+      setStatus('OpenCV siap', 'good');
+      startBtn.disabled = references.length > 0;
+    }
+  }
+  waitForOpenCV();
 
-    <!-- Target gambar tumbler -->
-    <a-entity
-      id="tumblerTarget"
-      mindar-image-target="targetIndex: 0"
-    >
+  function imageToCanvas(img, maxWidth=MAX_WIDTH) {
+    const scale = Math.min(1, maxWidth / img.naturalWidth);
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    return c;
+  }
 
-      <!-- Background teks -->
-      <a-plane
-        position="0 0.35 0.02"
-        width="1.15"
-        height="0.32"
-        color="#111827"
-        opacity="0.9"
-      ></a-plane>
+  function matFromCanvas(c) {
+    const rgba = cv.imread(c);
+    const gray = new cv.Mat();
+    cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
+    rgba.delete();
+    return gray;
+  }
 
-      <!-- Teks utama -->
-      <a-text
-        value="Ini adalah Tumbler!"
-        position="0 0.35 0.04"
-        align="center"
-        color="#FFFFFF"
-        width="2.5"
-        scale="0.5 0.5 0.5"
-      ></a-text>
+  function extractReference(img, name) {
+    const c = imageToCanvas(img);
+    const gray = matFromCanvas(c);
+    const orb = cv.ORB_create(1800);
+    const keypoints = new cv.KeyPointVector();
+    const descriptors = new cv.Mat();
+    const mask = new cv.Mat();
+    orb.detectAndCompute(gray, mask, keypoints, descriptors);
+    const points = [];
+    for (let i = 0; i < keypoints.size(); i++) {
+      const p = keypoints.get(i).pt;
+      points.push({x:p.x, y:p.y});
+    }
+    orb.delete(); keypoints.delete(); mask.delete(); gray.delete();
+    if (descriptors.empty() || points.length < 8) {
+      descriptors.delete();
+      throw new Error('Fitur visual terlalu sedikit pada ' + name + '. Coba foto yang lebih tajam dan memiliki detail.');
+    }
+    return {name, width:c.width, height:c.height, points, descriptors};
+  }
 
-      <!-- Teks tambahan -->
-      <a-text
-        value="Objek berhasil dikenali"
-        position="0 0.20 0.04"
-        align="center"
-        color="#FFFFFF"
-        width="2"
-        scale="0.35 0.35 0.35"
-      ></a-text>
+  function clearReferences() {
+    references.forEach(r => r.descriptors.delete());
+    references = [];
+  }
 
-    </a-entity>
-
-  </a-scene>
-
-  <script>
-    const scene = document.querySelector("a-scene");
-    const target = document.querySelector("#tumblerTarget");
-
-    const startScreen = document.querySelector("#startScreen");
-    const startButton = document.querySelector("#startButton");
-    const status = document.querySelector("#status");
-    const errorMessage = document.querySelector("#errorMessage");
-
-    let arStarted = false;
-
-    // Menunggu A-Frame selesai memuat scene
-    scene.addEventListener("loaded", () => {
-      startButton.disabled = false;
-    });
-
-    // Memulai kamera setelah tombol ditekan
-    startButton.addEventListener("click", async () => {
-
-      if (arStarted) return;
-
-      startButton.disabled = true;
-      startButton.textContent = "Mengaktifkan kamera...";
-      errorMessage.textContent = "";
-      status.textContent = "Mengaktifkan kamera...";
-
+  fileInput.addEventListener('change', async () => {
+    if (!cvReady) {
+      setStatus('OpenCV masih dimuat…');
+      return;
+    }
+    clearReferences();
+    refsEl.textContent = 'Memproses foto referensi…';
+    const files = Array.from(fileInput.files || []);
+    for (const file of files) {
       try {
-        const arSystem = scene.systems["mindar-image-system"];
-
-        await arSystem.start();
-
-        arStarted = true;
-
-        startScreen.style.display = "none";
-        status.textContent = "Arahkan kamera ke foto tumbler";
-
-      } catch (error) {
-
-        console.error("AR Error:", error);
-
-        status.textContent = "Kamera gagal diaktifkan";
-
-        errorMessage.textContent =
-          "Pastikan akses kamera diizinkan dan halaman dibuka melalui HTTPS.";
-
-        startButton.disabled = false;
-        startButton.textContent = "Coba Lagi";
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const ref = extractReference(img, file.name);
+        references.push(ref);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error(err);
+        detailEl.textContent = err.message || String(err);
       }
+    }
+    refsEl.innerHTML = '';
+    references.forEach(r => {
+      const tag = document.createElement('span');
+      tag.className = 'pill';
+      tag.textContent = `${r.name} · ${r.points.length} fitur`;
+      refsEl.appendChild(tag);
     });
+    if (!references.length) refsEl.textContent = 'Tidak ada referensi yang berhasil diproses.';
+    startBtn.disabled = !cvReady || references.length === 0;
+    setStatus(references.length ? `${references.length} referensi siap` : 'Referensi belum siap', references.length ? 'good' : 'warn');
+  });
 
-    // Ketika gambar tumbler terdeteksi
-    target.addEventListener("targetFound", () => {
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}
+      });
+      video.srcObject = stream;
+      await video.play();
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      setStatus('Kamera aktif — mencari tumbler…');
+      rafId = requestAnimationFrame(processFrame);
+    } catch (err) {
+      setStatus('Kamera tidak dapat dibuka', 'error');
+      detailEl.textContent = err.message + '. Pastikan izin kamera diberikan dan halaman menggunakan HTTPS atau localhost.';
+    }
+  }
 
-      status.textContent = "Tumbler berhasil dikenali!";
-      status.classList.add("found");
+  function stopCamera() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    video.srcObject = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    startBtn.disabled = references.length === 0;
+    stopBtn.disabled = true;
+    setStatus('Kamera dimatikan');
+    detailEl.textContent = 'Kamera berhenti.';
+  }
 
-    });
+  function makePointMat(points) {
+    const data = [];
+    points.forEach(p => data.push(p.x, p.y));
+    return cv.matFromArray(points.length, 1, cv.CV_32FC2, data);
+  }
 
-    // Ketika gambar tumbler tidak lagi terlihat
-    target.addEventListener("targetLost", () => {
+  function matchReference(ref, frameGray, frameKeypoints, frameDescriptors) {
+    if (frameDescriptors.empty() || frameKeypoints.size() < 8) return null;
+    const matcher = new cv.BFMatcher(cv.NORM_HAMMING, false);
+    const matches = new cv.DMatchVectorVector();
+    let good = [];
+    let src = null, dst = null, H = null, mask = null;
+    try {
+      matcher.knnMatch(ref.descriptors, frameDescriptors, matches, 2);
+      for (let i=0; i<matches.size(); i++) {
+        const pair = matches.get(i);
+        if (pair.size() >= 2) {
+          const m = pair.get(0);
+          const n = pair.get(1);
+          if (m.distance < 0.75 * n.distance) good.push(m);
+        }
+        pair.delete();
+      }
+      if (good.length < 8) return null;
 
-      status.textContent = "Mencari gambar tumbler...";
-      status.classList.remove("found");
+      const srcPoints = [], dstPoints = [];
+      good.forEach(m => {
+        srcPoints.push(ref.points[m.queryIdx]);
+        const p = frameKeypoints.get(m.trainIdx).pt;
+        dstPoints.push({x:p.x, y:p.y});
+      });
+      src = makePointMat(srcPoints);
+      dst = makePointMat(dstPoints);
+      mask = new cv.Mat();
+      H = cv.findHomography(src, dst, cv.RANSAC, 5, mask);
+      if (H.empty()) return null;
 
-    });
-  </script>
+      let inliers = 0;
+      for (let i=0; i<mask.rows; i++) if (mask.data[i] !== 0) inliers++;
+      if (inliers < 8) return null;
 
+      const corners = cv.matFromArray(4, 1, cv.CV_32FC2, [
+        0,0, ref.width,0, ref.width,ref.height, 0,ref.height
+      ]);
+      const projected = new cv.Mat();
+      cv.perspectiveTransform(corners, projected, H);
+      const poly = [];
+      for (let i=0; i<4; i++) {
+        const p = projected.data32F;
+        poly.push({x:p[i*2], y:p[i*2+1]});
+      }
+      corners.delete(); projected.delete();
+
+      return {name:ref.name, good:good.length, inliers, poly};
+    } catch (err) {
+      console.warn('Matching error:', err);
+      return null;
+    } finally {
+      matcher.delete(); matches.delete();
+      if (src) src.delete();
+      if (dst) dst.delete();
+      if (H) H.delete();
+      if (mask) mask.delete();
+    }
+  }
+
+  function drawResult(result) {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if (!result) return;
+    ctx.lineWidth = Math.max(3, canvas.width / 300);
+    ctx.strokeStyle = '#4ade80';
+    ctx.fillStyle = 'rgba(74,222,128,.10)';
+    ctx.beginPath();
+    result.poly.forEach((p,i) => i ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y));
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    const x = Math.max(8, Math.min(...result.poly.map(p=>p.x)));
+    const y = Math.max(28, Math.min(...result.poly.map(p=>p.y)));
+    ctx.font = `bold ${Math.max(18,canvas.width/32)}px system-ui`;
+    ctx.fillStyle = '#4ade80';
+    ctx.fillText('TUMBLER MATCH', x, y - 10);
+  }
+
+  function processFrame(timestamp) {
+    rafId = requestAnimationFrame(processFrame);
+    if (busy || !cvReady || video.readyState < 2 || timestamp - lastProcess < PROCESS_INTERVAL) return;
+    busy = true; lastProcess = timestamp;
+    let frame = null, gray = null, orb = null, kp = null, desc = null, mask = null;
+    try {
+      const scale = Math.min(1, MAX_WIDTH / video.videoWidth);
+      const w = Math.round(video.videoWidth * scale);
+      const h = Math.round(video.videoHeight * scale);
+      const temp = document.createElement('canvas');
+      temp.width = w; temp.height = h;
+      temp.getContext('2d').drawImage(video,0,0,w,h);
+      frame = cv.imread(temp);
+      gray = new cv.Mat();
+      cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
+      orb = cv.ORB_create(1600);
+      kp = new cv.KeyPointVector();
+      desc = new cv.Mat();
+      mask = new cv.Mat();
+      orb.detectAndCompute(gray, mask, kp, desc);
+
+      let best = null;
+      for (const ref of references) {
+        const result = matchReference(ref, gray, kp, desc);
+        if (result && (!best || result.inliers > best.inliers)) best = result;
+      }
+
+      // Scale overlay to the actual displayed video resolution.
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      }
+      if (best) {
+        const sx = video.videoWidth / w, sy = video.videoHeight / h;
+        best.poly = best.poly.map(p=>({x:p.x*sx,y:p.y*sy}));
+        drawResult(best);
+        setStatus('TUMBLER TERDETEKSI', 'good');
+        detailEl.textContent = `Referensi: ${best.name} · good matches: ${best.good} · inliers RANSAC: ${best.inliers}. Ini skor kecocokan fitur, bukan probabilitas AI.`;
+      } else {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        setStatus('Belum dikenali', 'warn');
+        detailEl.textContent = 'Belum cukup kecocokan fitur. Coba ubah sudut, jarak, pencahayaan, atau tambahkan foto referensi dari sisi tersebut.';
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus('Terjadi kesalahan saat memproses frame', 'error');
+      detailEl.textContent = err.message || String(err);
+    } finally {
+      if (frame) frame.delete();
+      if (gray) gray.delete();
+      if (orb) orb.delete();
+      if (kp) kp.delete();
+      if (desc) desc.delete();
+      if (mask) mask.delete();
+      busy = false;
+    }
+  }
+
+  startBtn.addEventListener('click', startCamera);
+  stopBtn.addEventListener('click', stopCamera);
+  window.addEventListener('beforeunload', () => {
+    stopCamera();
+    clearReferences();
+  });
+})();
+</script>
 </body>
 </html>
